@@ -2,7 +2,7 @@
  * @brief simple csv deserializer lib for c++
  * @author kylin
  * @date 2025-06-14
- * @version 0.0.1
+ * @version 0.0.2
  * @license MIT
  */
 
@@ -11,6 +11,9 @@
 #include <vector>
 #include <map>
 #include <fstream>
+
+
+namespace csv {
 
 struct CsvItem {
     std::string value;
@@ -29,7 +32,7 @@ struct CsvItem {
         value = other;
         return *this;
     }
-    operator std::string&() { return value; }
+    operator std::string() { return value; }
     std::string& str() { return value; }
     operator int() const {
         return std::stoi(value);
@@ -78,6 +81,11 @@ struct CsvReader {
         std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
         return CsvReader(content);
     }
+
+    /**
+        @brief skip next line
+        @return void
+    */
     void skip() {
         size_t offset = index;
         while(offset < content.size() && content[offset] != line_end) {
@@ -85,6 +93,13 @@ struct CsvReader {
         }
         index = offset + 1;
     }
+
+    /**
+        @param row the row to fill with data
+        @brief read next row, fill the row with data
+        @note &row will be cleared
+        @return true if read successfully, false if no more rows
+    */
     bool next(CsvRow& row) {
         if( index >= content.size() ) {
             return false;
@@ -144,3 +159,69 @@ inline CsvIndexDict make_header_dict(std::string_view header) {
     }
     return index;
 }
+
+
+
+struct skip_t {};
+struct end_of_line_t {};
+
+constexpr skip_t skip{};
+constexpr end_of_line_t eol{};
+
+template<typename ostream_t, char delimiter = ',', char line_end = '\n'>
+struct CsvWriter {
+    CsvWriter(ostream_t& os) : os(os), is_first(true) {}
+    ~CsvWriter() {
+        os.flush();
+    }
+    ostream_t& os;
+    bool is_first = true;
+
+private:
+    // 处理 endline_t 的重载
+    template <typename T>
+    typename std::enable_if<
+        std::is_same<typename std::decay<T>::type, end_of_line_t>::value,
+        CsvWriter &>::type
+    write_impl(T &&) {
+        os << line_end;
+        is_first = true;
+        os.flush();
+        return *this;
+    }
+
+    // 处理 skip_t 的重载
+    template<typename T>
+    typename std::enable_if<std::is_same<typename std::decay<T>::type, skip_t>::value, CsvWriter&>::type
+    write_impl(T&&) {
+        if (!is_first) {
+            os << delimiter;
+        }
+        is_first = false;
+        return *this;
+    }
+    
+    // 处理普通数据的重载
+    template <typename T>
+    typename std::enable_if<
+        !std::is_same<typename std::decay<T>::type, skip_t>::value &&
+            !std::is_same<typename std::decay<T>::type, end_of_line_t>::value,
+        CsvWriter &>::type
+    write_impl(T &&data) {
+      if (!is_first) {
+        os << delimiter;
+      }
+      os << data;
+      is_first = false;
+      return *this;
+    }
+
+public:
+    template<typename T>
+    CsvWriter& operator<<(T&& data) {
+        return write_impl(std::forward<T>(data));
+    }
+};
+
+
+} // end of namespace `csv`

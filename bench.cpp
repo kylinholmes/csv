@@ -1,8 +1,10 @@
 #include "csv.hpp"
 #include <iostream>
+#include <chrono>
 
 
 using namespace std;
+using namespace csv;
 
 int main(int argc, char* argv[]) {
     auto f = "data/orders.csv";
@@ -15,16 +17,15 @@ int main(int argc, char* argv[]) {
     CsvRow row(make_header_dict("tradeAcc,code,clientId,volume,direction,beginTime,endTime,algoType"));
     auto now = std::chrono::high_resolution_clock::now();
     while(reader.next(row)) {
-        string trade_acc  = row["tradeAcc"].str();
-        string code       = row[1].str();
-        string client_id  = row[2].str();
+        string trade_acc  = row["tradeAcc"];
+        string code       = row[1];
+        string client_id  = row[2];
         int64_t volume    = row["volume"];
-        string direction  = row["direction"].str();
-        string begin_time = row["beginTime"].str();
-        string end_time   = row["endTime"].str();
-        string algo_type  = row["algoType"].str();
+        string direction  = row["direction"];
+        string begin_time = row["beginTime"];
+        string end_time   = row["endTime"];
+        string algo_type  = row["algoType"];
     }
-    // ns
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - now);
     cout << "time: " << duration.count() << "ns" << endl;
