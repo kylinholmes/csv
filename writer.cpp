@@ -12,8 +12,7 @@ int main() {
     std::ofstream f("wdemo.csv");
     std::stringstream ss;
 
-    CsvWriter writer(f);
+    CsvWriter writer(std::cout);
     writer << "abc" << "def" << skip << skip << eol;
     
-    std::cout << ss.str();
 }

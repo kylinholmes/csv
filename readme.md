@@ -8,6 +8,10 @@
 - code easy and simple to read
 - `O(n)` in parsing one row string
 
+## TODO
+- [x] Writer, based on std::ostream
+- [ ] ~~Serialization and deserialization~~ ⚠ Abandoned: too complex
+
 ## Time complexity
 
 `O(n)` in parsing one row string
@@ -94,6 +98,22 @@ Time for parsing csv fmt string, using `size_t` as index
 |100 million|8| 26.656s|
 
 using `a.ipynb` to generate the bench data => `data/orders.csv`
+
+
+## Writer
+example: `writer.cpp`
+
+```cpp
+std::ofstream f("wdemo.csv");
+
+CsvWriter writer(f);
+writer << "abc" << "def" << skip << skip << eol;
+```
+
+Any sub of `std::ostream` is ok,
+
+like `std::stringstream` `std::cout` `std::ofstream`
+
 
 ## End
 
