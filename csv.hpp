@@ -1,24 +1,33 @@
 /**
- * @brief simple csv deserializer lib for c++
+ * @brief simple csv (de)serializer lib for c++
  * @author kylin
- * @date 2025-06-14
- * @version 0.0.2
+ * @date 2025-08-19
+ * @version 0.0.3
  * @license MIT
  */
 
 #pragma once
+#include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <map>
 #include <fstream>
 
 
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdexcept>
+#include <sys/mman.h>
+
+
 namespace csv {
 
 struct CsvItem {
-    std::string value;
+    std::string_view value;
     CsvItem(const CsvItem& other) : value(other.value) {}
-    CsvItem(std::string&& value)  : value(std::move(value)) {}
+    CsvItem(std::string_view sv)  : value(sv) {}
     CsvItem& operator=(CsvItem&& other) {
         value = std::move(other.value);
         return *this;
@@ -27,26 +36,29 @@ struct CsvItem {
         value = std::move(other);
         return *this;
     }
-    // 添加 const string& 的赋值运算符
     CsvItem& operator=(const std::string& other) {
         value = other;
         return *this;
     }
-    operator std::string() { return value; }
-    std::string& str() { return value; }
+    operator std::string() { return value.data(); }
     operator int() const {
-        return std::stoi(value);
+        return std::stoi(value.data());
     }
     operator double() const {
-        return std::stod(value);
+        return std::stod(value.data());
     }
     operator int64_t() const {
-        return std::stoll(value);
+        return std::stoll(value.data());
     }
     operator size_t() const {
-        return std::stoull(value);
+        return std::stoull(value.data());
     }
 };
+
+std::ostream& operator<<(std::ostream& os, const CsvItem& item) {
+    os << item.value;
+    return os;
+}
 
 using CsvIndexDict = std::map<std::string, size_t>;
 
@@ -67,19 +79,30 @@ struct CsvRow: std::vector<CsvItem> {
 
 template<char delimiter = ',', char line_end = '\n'>
 struct CsvReader {
-    std::string content;
+    std::string_view content;
     size_t index;
+    char* _data;
 
-    CsvReader(std::string& content)  : content(content), index(0) { }
-    CsvReader(std::string&& content) : content(std::move(content)), index(0) { }
-    CsvReader(std::string_view content)  : content(content.data(), content.size()), index(0) { }
-    static CsvReader open_file(const std::string& file, bool throw_error = true) {
-        std::ifstream f(file);
-        if (!f.is_open() && throw_error) {
-            throw std::runtime_error("\ncannot open file: " + file);
+    CsvReader(std::string& content)  : content(content), index(0), _data(nullptr) { }
+    CsvReader(const std::string_view& content)  : content(content), index(0), _data(nullptr) { }
+    CsvReader(const std::string_view& content, char* data)  : content(content), index(0), _data(data) { }
+    ~CsvReader() {
+        if (_data) {
+            munmap(_data, content.size());
         }
-        std::string content((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
-        return CsvReader(content);
+    }
+    static CsvReader open_file(const std::string& file, bool throw_error = true) {
+        int fd = open(file.c_str(), O_RDONLY);
+        if (fd == -1 && throw_error) {
+            throw std::runtime_error("cannot open file: " + file);
+        }
+        struct stat sb;
+        fstat(fd, &sb);
+        size_t length = sb.st_size;
+        char* data = (char*)mmap(nullptr, length, PROT_READ, MAP_PRIVATE, fd, 0);
+        close(fd);
+        CsvReader rd(std::string_view(data, length), data);
+        return rd;
     }
 
     /**
@@ -129,10 +152,7 @@ struct CsvReader {
                 case '\r':
                     break;
                 default: {
-                    if(!first_c) { 
-                        first_c = true;
-                        head = cursor;
-                    }
+                    first_c = !first_c?head=cursor,true:first_c;
                     tail = cursor;
                     break;
                 }
@@ -155,7 +175,7 @@ inline CsvIndexDict make_header_dict(std::string_view header) {
     reader.next(row);
     CsvIndexDict index;
     for(size_t i = 0; i < row.size(); i++) {
-        index[row[i].str()] = i;
+        index[row[i]] = i;
     }
     return index;
 }
@@ -178,7 +198,7 @@ struct CsvWriter {
     bool is_first = true;
 
 private:
-    // 处理 endline_t 的重载
+    // override of endline_t 
     template <typename T>
     typename std::enable_if<
         std::is_same<typename std::decay<T>::type, end_of_line_t>::value,
@@ -190,7 +210,7 @@ private:
         return *this;
     }
 
-    // 处理 skip_t 的重载
+    // override of skip_t 
     template<typename T>
     typename std::enable_if<std::is_same<typename std::decay<T>::type, skip_t>::value, CsvWriter&>::type
     write_impl(T&&) {
@@ -201,7 +221,7 @@ private:
         return *this;
     }
     
-    // 处理普通数据的重载
+    // override of other
     template <typename T>
     typename std::enable_if<
         !std::is_same<typename std::decay<T>::type, skip_t>::value &&

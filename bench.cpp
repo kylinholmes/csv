@@ -13,18 +13,12 @@ int main(int argc, char* argv[]) {
     }
     cout << "file: " << f << endl;
     auto reader = CsvReader<>::open_file(f, true);
-    reader.skip(); // skip header
-    CsvRow row(make_header_dict("tradeAcc,code,clientId,volume,direction,beginTime,endTime,algoType"));
+
+    reader.skip(); // skip one line, header
+    CsvRow row;
     auto now = std::chrono::high_resolution_clock::now();
     while(reader.next(row)) {
-        string trade_acc  = row["tradeAcc"];
-        string code       = row[1];
-        string client_id  = row[2];
-        int64_t volume    = row["volume"];
-        string direction  = row["direction"];
-        string begin_time = row["beginTime"];
-        string end_time   = row["endTime"];
-        string algo_type  = row["algoType"];
+
     }
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - now);
